@@ -17,16 +17,20 @@ import logging
 from google import genai
 from google.genai import types, live
 
-from .hardware import CameraStreamer, RobotActionShim, SonarMonitor, PROJECT_ROOT
+from .hardware import CameraStreamer, RobotActionShim, SonarMonitor, CarChassisShim, PROJECT_ROOT, TELEMETRY
 
 
 DEFAULT_MODEL_ID = "gemini-2.0-flash-exp"
 SYSTEM_PROMPT = """
 You are a robotic arm agent with a wrist camera and an optional sonar sensor.
 - You see the live camera feed; you can call tools to move and control the gripper.
+- If the view is blank/uncertain, DO NOT move. Wait for a usable frame before acting.
 - Coordinate system: +X right, +Y down (image space), +Z forward (toward objects).
-- Move in small, smooth increments (0.02m-0.10m). Use multiple steps to refine.
-- When aligned with the target, close the gripper; open to release.
+- HUD overlay shows ARM (x,y,z), GRIPPER state, CAR velocity/direction/angular_rate.
+- Use move_car for coarse reposition (e.g., target off-screen); keep velocity_mm_s small (20-80) and angular_rate modest; stop if uncertain.
+- Use move_arm for fine adjustments near the target; move in small, smooth increments (0.02m-0.10m). Avoid repeating zero-effect moves; do not move if target not visible.
+- Use control_gripper to open/close only when aligned; avoid toggling repeatedly.
+- The mecanum chassis can move with polar velocity: move_car(velocity_mm_s, direction_deg, angular_rate) with 0deg right, 90deg forward, 180deg left, 270deg back.
 - Respond ONLY with the provided tools. Do not emit free-form text.
 """
 
@@ -55,6 +59,29 @@ TOOLS: List[Dict[str, Any]] = [
                         "action": {"type": "STRING", "enum": ["open", "close"]},
                     },
                     "required": ["action"],
+                },
+            },
+            {
+                "name": "move_car",
+                "description": "Moves the mecanum chassis using polar velocity (mm/s, degrees) and optional spin.",
+                "parameters": {
+                    "type": "OBJECT",
+                    "properties": {
+                        "velocity_mm_s": {
+                            "type": "NUMBER",
+                            "description": "Linear speed in mm/s (0 = stop)."
+                        },
+                        "direction_deg": {
+                            "type": "NUMBER",
+                            "description": "Direction in degrees (0 right, 90 forward, 180 left, 270 back)."
+                        },
+                        "angular_rate": {
+                            "type": "NUMBER",
+                            "description": "Self-rotation rate (positive clockwise).",
+                            "default": 0
+                        },
+                    },
+                    "required": ["velocity_mm_s", "direction_deg"],
                 },
             },
         ]
@@ -105,14 +132,28 @@ class GeminiLiveAgent:
         enable_hardware: bool = False,
         sonar_guard: bool = False,
         sonar_threshold_mm: int = 120,
+        observe_seconds: float = 2.0,
+        observe_sweep: bool = True,
     ) -> None:
         self.api_key = api_key
         self.model = model
         self.interval = 1.0 / max(fps, 0.1)  # 帧发送周期（秒）
+        self.observe_seconds = observe_seconds  # 初始观察时间
+        self.observe_deadline = time.time()  # 将在 run 中刷新
+        self.observe_sweep = observe_sweep
         # 感知：从 Camera.Camera 读帧、JPEG 编码
-        self.camera = CameraStreamer(width=frame_size[0], height=frame_size[1], jpeg_quality=jpeg_quality)
+        hud_port = int(os.getenv("GEMINI_LIVE_HUD_PORT", "8090"))
+        self.camera = CameraStreamer(
+            width=frame_size[0],
+            height=frame_size[1],
+            jpeg_quality=jpeg_quality,
+            start_mjpeg_stream=True,
+            stream_port=hud_port,
+        )
         # 执行：机械臂/夹爪（默认干跑，不触硬件）
         self.robot = RobotActionShim(enable_hardware=enable_hardware)
+        # 执行：底盘
+        self.chassis = CarChassisShim(enable_hardware=enable_hardware)
         # 安全：可选声呐守卫
         self.sonar = SonarMonitor(enabled=sonar_guard, guard_threshold_mm=sonar_threshold_mm)
         logging.info(
@@ -167,6 +208,22 @@ class GeminiLiveAgent:
                 args = fcall.args or {}
                 call_id = fcall.id
 
+                # 初始观察阶段：阻塞执行，仅反馈状态
+                now = time.time()
+                if now < self.observe_deadline:
+                    await session.send_tool_response(
+                        function_responses=types.FunctionResponse(
+                            name=name,
+                            response={
+                                "status": "blocked",
+                                "reason": "observe_phase",
+                                "observe_remaining_s": round(self.observe_deadline - now, 2),
+                            },
+                            id=call_id,
+                        )
+                    )
+                    continue
+
                 if name == "move_arm":
                     dx = float(args.get("dx", 0))
                     dy = float(args.get("dy", 0))
@@ -176,20 +233,30 @@ class GeminiLiveAgent:
                         await session.send_tool_response(
                             function_responses=types.FunctionResponse(
                                 name=name,
-                                response={"status": "blocked", "reason": reason, **telemetry},
+                                response={"status": "blocked", "reason": reason, **telemetry, "telemetry": TELEMETRY.snapshot()},
                                 id=call_id,
                             )
                         )
                         continue
 
                     result = self.robot.move_relative(dx, dy, dz)
-                    await session.send_tool_response(
-                        function_responses=types.FunctionResponse(
-                            name=name,
-                            response={"status": "ok", **result, **telemetry},
-                            id=call_id,
+                    # 如果不可达，不执行并提示模型重新规划
+                    if not result.get("reachable", True):
+                        await session.send_tool_response(
+                            function_responses=types.FunctionResponse(
+                                name=name,
+                                response={"status": "blocked", "reason": "ik_unreachable", **result, **telemetry, "telemetry": TELEMETRY.snapshot()},
+                                id=call_id,
+                            )
                         )
-                    )
+                    else:
+                        await session.send_tool_response(
+                            function_responses=types.FunctionResponse(
+                                name=name,
+                                response={"status": "ok", **result, **telemetry, "telemetry": TELEMETRY.snapshot()},
+                                id=call_id,
+                            )
+                        )
 
                 elif name == "control_gripper":
                     action = str(args.get("action", ""))
@@ -197,7 +264,19 @@ class GeminiLiveAgent:
                     await session.send_tool_response(
                         function_responses=types.FunctionResponse(
                             name=name,
-                            response=result,
+                            response={**result, "telemetry": TELEMETRY.snapshot()},
+                            id=call_id,
+                        )
+                    )
+                elif name == "move_car":
+                    velocity = float(args.get("velocity_mm_s", 0))
+                    direction = float(args.get("direction_deg", 0))
+                    angular_rate = float(args.get("angular_rate", 0))
+                    result = self.chassis.set_velocity(velocity, direction, angular_rate)
+                    await session.send_tool_response(
+                        function_responses=types.FunctionResponse(
+                            name=name,
+                            response={"status": "ok", **result, "telemetry": TELEMETRY.snapshot()},
                             id=call_id,
                         )
                     )
@@ -225,9 +304,23 @@ class GeminiLiveAgent:
         logging.info("Connecting to Gemini Live model=%s ...", self.model)
         async with client.aio.live.connect(model=self.model, config=config) as session:
             logging.info("Connected. Starting send/receive loops.")
+            # 初始观察阶段，给模型一些时间“看环境”
+            self.observe_deadline = time.time() + max(self.observe_seconds, 0.0)
+            # 给模型一个文字提示：正在观察环境
+            observe_note = f"开始前先观察环境 {self.observe_seconds:.1f}s，请耐心等待后再下达动作。任务：{task_prompt}"
+            observe_content = types.Content(role="user", parts=[types.Part(text=observe_note)])
+            await session.send_client_content(turns=observe_content, turn_complete=True)
+            # 硬件环视（可选）：左右小幅扫视，帮助模型建立环境感
+            sweep_task = None
+            if self.robot.enable_hardware and self.observe_sweep and self.observe_seconds > 0:
+                loop = asyncio.get_running_loop()
+                sweep_task = loop.run_in_executor(None, self.robot.observe_sweep, 1, None, None)
             sender = asyncio.create_task(self._send_loop(session, task_prompt))
             receiver = asyncio.create_task(self._receive_loop(session))
-            await asyncio.gather(sender, receiver)
+            if sweep_task:
+                await asyncio.gather(sender, receiver, sweep_task)
+            else:
+                await asyncio.gather(sender, receiver)
 
 
 def parse_args() -> argparse.Namespace:
@@ -242,6 +335,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--dry-run", action="store_true", help="Force hardware off (default is off).")
     parser.add_argument("--sonar-guard", action="store_true", help="Enable sonar-based forward guard.")
     parser.add_argument("--sonar-threshold-mm", type=int, default=120, help="Guard threshold in mm.")
+    parser.add_argument("--observe-seconds", type=float, default=2.0, help="初始观察环境时间，期间阻塞动作。")
+    parser.add_argument("--observe-sweep", action="store_true", help="初始观察阶段执行左右扫视（仅硬件开启时生效）。")
     parser.add_argument("--api-key", default=None, help="Gemini API key (overrides .env/ENV).")
     parser.add_argument("--log-level", default="INFO", help="Logging level (DEBUG, INFO, WARNING...).")
     return parser.parse_args()
@@ -273,6 +368,8 @@ async def _main_async(args: argparse.Namespace) -> None:
         enable_hardware=args.enable_hardware and not args.dry_run,
         sonar_guard=args.sonar_guard,
         sonar_threshold_mm=args.sonar_threshold_mm,
+        observe_seconds=args.observe_seconds,
+        observe_sweep=args.observe_sweep,
     )
     await agent.run(args.task)
 

@@ -31,6 +31,8 @@ def MotorStop():
     Board.setMotor(3, 0)
     Board.setMotor(4, 0)
 
+motor_num = 4
+
 start = True
 #关闭前处理
 def Stop(signum, frame):
@@ -46,11 +48,11 @@ signal.signal(signal.SIGINT, Stop)
 if __name__ == '__main__':
     
     while True:
-        Board.setMotor(1, 35)  #设置1号电机速度35
+        Board.setMotor(motor_num, 35)  #设置1号电机速度35
         time.sleep(1)
-        Board.setMotor(1, 60)  #设置1号电机速度60
+        Board.setMotor(motor_num, 60)  #设置1号电机速度60
         time.sleep(2)
-        Board.setMotor(1, 90)  #设置1号电机速度90
+        Board.setMotor(motor_num, 90)  #设置1号电机速度90
         time.sleep(3)    
         
         if not start:

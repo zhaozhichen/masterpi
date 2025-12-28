@@ -24,15 +24,35 @@ if __name__ == "__main__":
     movetime:为舵机转动时间，单位ms, 如果不给出时间，则自动计算    
     '''
     # 设置机械臂初始位置(x:0, y:6, z:18),运行时间:1500毫秒
-    AK.setPitchRangeMoving((0, 6, 18), 0,-90, 90, 1500) 
+    # AK.setPitchRangeMoving((0, 6, 18), 0,-90, 90, 1500) 
     time.sleep(1.5) # 延时1.5秒
-    AK.setPitchRangeMoving((5, 6, 18), 0,-90, 90, 1000)  # 设置机械臂X轴右移,运行时间:1000毫秒
-    time.sleep(1.2) # 延时1.2秒
-    AK.setPitchRangeMoving((5, 13, 11), 0,-90, 90, 1000) #设置机械臂Y轴、Z轴同时移动，运行时间:1000毫秒
-    time.sleep(1.2) # 延时1.2秒
-    AK.setPitchRangeMoving((-5, 13, 11), 0,-90, 90, 1000) # 设置机械臂X轴右移,运行时间:1000毫秒
-    time.sleep(1.2) # 延时1.2秒
-    AK.setPitchRangeMoving((-5, 6, 18), 0,-90, 90, 1000)  #设置机械臂Y轴、Z轴同时移动，运行时间:1000毫秒
-    time.sleep(1.2) # 延时1.2秒
-    AK.setPitchRangeMoving((0, 6, 18), 0,-90, 90, 1000) # 设置机械臂X轴左移,运行时间:1000毫秒
-    time.sleep(1.2) # 延时1.2秒
+    AK.setPitchRangeMoving((0, 0, 0), 0,-90, 90, 1500) 
+    time.sleep(1.5) # 延时1.5秒
+    AK.setPitchRangeMoving((10, 0, 0), 0,-90, 90, 1500) 
+    time.sleep(1.5) # 延时1.5秒
+    AK.setPitchRangeMoving((-10, 0, 0), 0,-90, 90, 1500) 
+    time.sleep(1.5) # 延时1.5秒
+    AK.setPitchRangeMoving((0, 0, 0), 0,-90, 90, 1500) 
+    time.sleep(1.5) # 延时1.5秒
+    AK.setPitchRangeMoving((0, 10, 0), 0,-90, 90, 1500) 
+    time.sleep(1.5) # 延时1.5秒
+    AK.setPitchRangeMoving((0, -10, 0), 0,-90, 90, 1500) 
+    time.sleep(1.5) # 延时1.5秒
+    AK.setPitchRangeMoving((0, 0, 0), 0,-90, 90, 1500) 
+    time.sleep(1.5) # 延时1.5秒
+    AK.setPitchRangeMoving((0, 0, 10), 0,-90, 90, 1500) 
+    time.sleep(1.5) # 延时1.5秒
+    AK.setPitchRangeMoving((0, 0, -10), 0,-90, 90, 1500) 
+    time.sleep(1.5) # 延时1.5秒
+    AK.setPitchRangeMoving((0, 0, 0), 0,-90, 90, 1500) 
+    time.sleep(1.5) # 延时1.5秒
+    # AK.setPitchRangeMoving((5, 6, 18), 0,-90, 90, 1000)  # 设置机械臂X轴右移,运行时间:1000毫秒
+    # time.sleep(1.2) # 延时1.2秒
+    # AK.setPitchRangeMoving((5, 13, 11), 0,-90, 90, 1000) #设置机械臂Y轴、Z轴同时移动，运行时间:1000毫秒
+    # time.sleep(1.2) # 延时1.2秒
+    # AK.setPitchRangeMoving((-5, 13, 11), 0,-90, 90, 1000) # 设置机械臂X轴右移,运行时间:1000毫秒
+    # time.sleep(1.2) # 延时1.2秒
+    # AK.setPitchRangeMoving((-5, 6, 18), 0,-90, 90, 1000)  #设置机械臂Y轴、Z轴同时移动，运行时间:1000毫秒
+    # time.sleep(1.2) # 延时1.2秒
+    # AK.setPitchRangeMoving((0, 6, 18), 0,-90, 90, 1000) # 设置机械臂X轴左移,运行时间:1000毫秒
+    # time.sleep(1.2) # 延时1.2秒
