@@ -25,3 +25,6 @@ json-rpc>=1.13.0
 matplotlib>=3.0.0
 pandas>=2.0.0
 
+# Gemini Live 控制框架
+google-genai>=0.3.0
+python-dotenv>=1.0.0
