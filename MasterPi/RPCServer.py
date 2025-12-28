@@ -37,6 +37,13 @@ __RPC_E05 = "E05 - Not callable"
 HWSONAR = None
 QUEUE = None
 
+# 初始化ArmIK实例用于机械臂逆运动学控制
+try:
+    AK = ArmIK()
+except Exception as e:
+    print(f"Warning: Failed to initialize ArmIK: {e}")
+    AK = None
+
 ColorDete.initMove()
 ColorDete.setBuzzer(0.3)
 
@@ -1629,14 +1636,20 @@ def ArmMoveIk(*args):
         - 目标位置必须在机械臂工作空间内
         - 如果目标位置不可达，会返回失败
     """
+    global AK
     ret = (True, (), 'ArmMoveIk')
     if len(args) != 7:
         return (False, __RPC_E01, 'ArmMoveIk')
+    if AK is None:
+        return (False, __RPC_E03, 'ArmMoveIk')
     try:
-        result = setPitchRangeMoving((args[0], args[1], args[2]), args[3], args[4], args[5], args[6])
-        ret = (True, result)
+        result = AK.setPitchRangeMoving((args[0], args[1], args[2]), args[3], args[4], args[5], args[6])
+        if result == False:
+            ret = (False, __RPC_E03, 'ArmMoveIk')
+        else:
+            ret = (True, result, 'ArmMoveIk')
     except Exception as e:
-        print(e)
+        print(f"ArmMoveIk error: {e}")
         ret = (False, __RPC_E03, 'ArmMoveIk')
     return ret
         
