@@ -1,0 +1,59 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+*.egg-info/
+dist/
+build/
+
+# IDE
+.vscode/
+.cursor-server/
+.idea/
+*.swp
+*.swo
+*~
+
+# System files
+.DS_Store
+Thumbs.db
+.bash_history
+.Xauthority
+.cache/
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.bak
+*.swp
+
+# Git submodules (keep structure but don't track their internals)
+MasterPi_PC_Software/.git
+mjpg-streamer/.git
+pigpio/.git
+rpi-ws281x-python/.git
+create_ap/.git
+
+# User directories
+Desktop/
+Documents/
+Downloads/
+Music/
+Pictures/
+Public/
+Templates/
+Videos/
+
+# Build artifacts
+*.o
+*.a
+*.so
+*.dylib
+

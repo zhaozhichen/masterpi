@@ -1,0 +1,27 @@
+# 树莓派机器人系统依赖包
+# Python 3 环境
+
+# GUI界面（仅在PC端使用，如需GUI请在PC上单独安装 PyQt5）
+# PyQt5 wheels 对 Python 3.13/aarch64 未提供，树莓派上可跳过
+
+# 计算机视觉
+opencv-python>=4.5.0
+numpy>=1.19.0
+
+# 配置文件处理
+PyYAML>=5.4.0
+
+# 硬件通信
+smbus2>=0.4.0
+RPi.GPIO>=0.7.0
+rpi-ws281x>=4.2.0
+
+# 网络通信
+requests>=2.25.0
+werkzeug>=2.0.0
+json-rpc>=1.13.0
+
+# 其他依赖
+matplotlib>=3.0.0
+pandas>=2.0.0
+
